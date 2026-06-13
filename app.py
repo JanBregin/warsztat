@@ -2,12 +2,91 @@ import streamlit as st
 import json
 import base64
 import urllib.parse
+import os
+import requests
+from fpdf import FPDF
 
 # Adres Twojej aplikacji wpisany na stałe:
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka
+TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
+
+# Funkcja automatycznie pobierająca polskie czcionki z Google Fonts, aby PDF nie miał błędów
+@st.cache_data
+def pobierz_czcionki():
+    pulpit_regular = "Roboto-Regular.ttf"
+    pulpit_bold = "Roboto-Bold.ttf"
+    if not os.path.exists(pulpit_regular):
+        r = requests.get("https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.ttf")
+        with open(pulpit_regular, "wb") as f: f.write(r.content)
+    if not os.path.exists(pulpit_bold):
+        r = requests.get("https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBc4.ttf")
+        with open(pulpit_bold, "wb") as f: f.write(r.content)
+    return pulpit_regular, pulpit_bold
+
+# Funkcja generująca plik PDF w locie
+def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
+    reg, bld = pobierz_czcionki()
+    
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.add_font("Roboto", "", reg)
+    pdf.add_font("Roboto", "B", bld)
+    
+    # Nagłówek raportu
+    pdf.set_font("Roboto", "B", 20)
+    pdf.cell(0, 12, "RAPORT STANU POJAZDU", ln=True, align="C")
+    pdf.set_font("Roboto", "", 10)
+    pdf.cell(0, 6, "Cyfrowy Certyfikat Serwisowy", ln=True, align="C")
+    pdf.ln(10)
+    
+    # Sekcja: Dane Pojazdu
+    pdf.set_font("Roboto", "B", 14)
+    pdf.cell(0, 8, f"🚗 Pojazd: {data.get('auto', 'Nie podano')}", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    pdf.cell(0, 6, f"Numer rejestracyjny: {data.get('nr_rej', 'Nie podano')}", ln=True)
+    pdf.cell(0, 6, f"Status naprawy: {data.get('status', 'W kolejce')}", ln=True)
+    if data.get('odbior'):
+        pdf.cell(0, 6, f"Planowany odbiór: {data.get('odbior')}", ln=True)
+    pdf.ln(8)
+    
+    # Sekcja: Stan Techniczny
+    pdf.set_font("Roboto", "B", 14)
+    pdf.cell(0, 8, "🔍 Wyniki weryfikacji technicznej:", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    pdf.cell(0, 6, f"• Hamulce: {data.get('hamulce', 'Brak danych')}", ln=True)
+    pdf.cell(0, 6, f"• Olej silnikowy: {data.get('olej', 'Brak danych')}", ln=True)
+    pdf.cell(0, 6, f"• Zawieszenie: {data.get('zawieszenie', 'Brak danych')}", ln=True)
+    pdf.cell(0, 6, f"• Opony: {data.get('opony', 'Brak danych')}", ln=True)
+    pdf.ln(6)
+    
+    if data.get('uwagi'):
+        pdf.set_font("Roboto", "B", 12)
+        pdf.cell(0, 6, "💬 Uwagi i zalecenia mechanika:", ln=True)
+        pdf.set_font("Roboto", "", 11)
+        pdf.multi_cell(0, 6, data.get('uwagi'))
+        pdf.ln(6)
+        
+    # Sekcja: Kosztorys
+    pdf.set_font("Roboto", "B", 14)
+    pdf.cell(0, 8, "💰 Szczegółowy kosztorys:", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    
+    czesci_lista = data.get('czesci', [])
+    if czesci_lista:
+        for czesc in czesci_lista:
+            pdf.cell(0, 6, f"  - {czesc['nazwa']}: {float(czesc['cena']):,.2f} PLN", ln=True)
+    
+    pdf.ln(4)
+    pdf.cell(0, 6, f"Suma za części: {suma_czesci:,.2f} PLN", ln=True)
+    pdf.cell(0, 6, f"Koszt robocizny / usługi: {c_robocizna:,.2f} PLN", ln=True)
+    pdf.set_font("Roboto", "B", 13)
+    pdf.cell(0, 10, f"RAZEM DO ZAPŁATY: {suma_total:,.2f} PLN", ln=True)
+    
+    # Sekcja: Faktura (jeśli klient wybrał)
+    # W bezbazowej wersji PDF wygeneruje się po stronie klienta, więc sprawdzamy stan formularza
+    return pdf.output()
 
 def encode_data(data_dict):
     json_str = json.dumps(data_dict)
@@ -24,7 +103,7 @@ query_params = st.query_params
 
 if "view" in query_params:
     # =============================================================
-    # WIDOK DLA KLIENTA (Otwiera klient po kliknięciu w link)
+    # WIDOK DLA KLIENTA
     # =============================================================
     encoded_str = query_params["view"]
     data = decode_data(encoded_str)
@@ -35,7 +114,7 @@ if "view" in query_params:
         st.caption(f"Numer rejestracyjny: {data.get('nr_rej', 'Brak')}")
         st.write("---")
         
-        # PASEK POSTĘPU NAPRAWY DLA KLIENTA
+        # PASEK POSTĘPU
         st.subheader("⏳ Aktualny status prac")
         status_klienta = data.get('status', 'W kolejce')
         procenty = {"W kolejce": 10, "Diagnoza / Rozkręcanie": 35, "Naprawa w toku": 65, "Testy końcowe": 85, "Gotowe do odbioru! 🎉": 100}
@@ -70,14 +149,13 @@ if "view" in query_params:
             st.write("---")
             st.info(f"💬 **Uwagi mechanika:**\n\n{data.get('uwagi')}")
             
-        # 💰 SEKCOJA: KOSZTORYS I ROZBICIE CZĘŚCI
+        # KOSZTORYS
         st.write("---")
         st.subheader("💰 Podsumowanie Kosztów")
         st.write("⚙️ **Wyszczególnienie użytych części:**")
         
         czesci_lista = data.get('czesci', [])
         suma_czesci = 0.0
-        
         if czesci_lista:
             for czesc in czesci_lista:
                 st.write(f"• {czesc['nazwa']}: **{float(czesc['cena']):,.2f} PLN**".replace(",", " "))
@@ -97,7 +175,22 @@ if "view" in query_params:
             
         st.subheader(f"Razem do zapłaty: {suma_total:,.2f} PLN".replace(",", " "))
         
-        # Sekcja akceptacji - chowa się, gdy auto jest już naprawione i gotowe
+        # 🟢 NOWOŚĆ: GENEROWANIE I POBIERANIE PDF PRZEZ KLIENTA
+        st.write("---")
+        st.subheader("📥 Pobierz dokument")
+        try:
+            pdf_data = generuj_pdf(data, suma_total, suma_czesci, c_robocizna)
+            st.download_button(
+                label="📥 Pobierz oficjalny raport PDF",
+                data=bytes(pdf_data),
+                file_name=f"Raport_{data.get('nr_rej', 'serwis')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.error("Nie udało się wygenerować pliku PDF. Zgłoś to do warsztatu.")
+        
+        # Sekcja akceptacji
         if status_klienta != "Gotowe do odbioru! 🎉":
             st.write("---")
             st.subheader("✍️ Akceptacja naprawy online")
@@ -111,8 +204,6 @@ if "view" in query_params:
                 nip_klient = st.text_input("Numer NIP")
                 if firma_klient or nip_klient:
                     faktura_dodatek_sms = f"\n\n📄 DANE DO FAKTURY VAT:\n• Firma: {firma_klient}\n• NIP: {nip_klient}"
-                else:
-                    faktura_dodatek_sms = f"\n\n📄 [Klient poprosił o fakturę VAT, brak danych]"
 
             tekst_akceptacji = (
                 f"Cześć! Akceptuję koszty i zakres naprawy mojego samochodu {data.get('auto')} ({data.get('nr_rej')}).\n"
@@ -123,7 +214,7 @@ if "view" in query_params:
             link_do_mechanika = f"https://wa.me/{TELEFON_WARSZTATU}?text={tekst_akceptacji_url}"
             
             st.write(" ")
-            st.link_button("✅ AKCEPTUJĘ NAPRAWĘ I KOSZTY", link_do_mechanika, type="primary")
+            st.link_button("✅ AKCEPTUJĘ NAPRAWĘ I KOSZTY", link_do_mechanika, type="primary", use_container_width=True)
         else:
             st.write("---")
             st.success("🚗 Samochód pomyślnie przeszedł wszystkie testy końcowe i oczekuje na odbiór w warsztacie!")
@@ -134,7 +225,7 @@ if "view" in query_params:
 
 else:
     # =============================================================
-    # WIDOK DLA MECHANIKA (Panel Janka)
+    # WIDOK DLA MECHANIKA
     # =============================================================
     st.title("🔧 Panel Mechanika")
     st.write("Wprowadź dane pojazdu, szczegóły naprawy oraz koszty.")
@@ -199,11 +290,9 @@ else:
             
             st.success("🎉 Wszystko przygotowane!")
             
-            # Wyliczamy sumę końcową do wiadomości SMS
             suma_czesci_calc = sum(float(c['cena']) for c in czesci_dane)
             suma_total_calc = suma_czesci_calc + float(koszt_robocizny)
             
-            # 🟢 DYNAMICZNA ZMIANA TEKSTU WHATSAPP W ZALEŻNOŚCI OD STATUSU
             if status == "Gotowe do odbioru! 🎉":
                 tekst_wiadomosci = (
                     f"🎯 Dobre wieści! Twój samochód {auto} ({nr_rej}) jest już GOTOWY DO ODBIORU! 🎉\n\n"
