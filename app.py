@@ -9,21 +9,27 @@ from datetime import datetime, time
 
 # Adres Twojej aplikacji wpisany na stałe:
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka
+TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
-# Funkcja automatycznie pobierająca polskie czcionki z Google Fonts, aby PDF nie miał błędów
+# Funkcja automatycznie pobierająca polskie czcionki z oficjalnego GitHuba Google Fonts
 @st.cache_data
 def pobierz_czcionki():
-    pulpit_regular = "Roboto-Regular.ttf"
-    pulpit_bold = "Roboto-Bold.ttf"
+    # Zmieniamy nazwy na -v2, aby wymusić usunięcie starego, uszkodzonego pliku z pamięci chmury
+    pulpit_regular = "Roboto-Regular-v2.ttf"
+    pulpit_bold = "Roboto-Bold-v2.ttf"
+    
     if not os.path.exists(pulpit_regular):
-        r = requests.get("https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.ttf")
-        with open(pulpit_regular, "wb") as f: f.write(r.content)
+        r = requests.get("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf")
+        if r.status_code == 200:
+            with open(pulpit_regular, "wb") as f: f.write(r.content)
+            
     if not os.path.exists(pulpit_bold):
-        r = requests.get("https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBc4.ttf")
-        with open(pulpit_bold, "wb") as f: f.write(r.content)
+        r = requests.get("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf")
+        if r.status_code == 200:
+            with open(pulpit_bold, "wb") as f: f.write(r.content)
+            
     return pulpit_regular, pulpit_bold
 
 # Funkcja generująca plik PDF w locie
@@ -32,6 +38,8 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     
     pdf = FPDF()
     pdf.add_page()
+    
+    # Rejestracja czcionek wspierających polskie znaki
     pdf.add_font("Roboto", "", reg)
     pdf.add_font("Roboto", "B", bld)
     
@@ -239,7 +247,7 @@ if "view" in query_params:
 
 else:
     # =============================================================
-    # WIDOK DLA MECHANIKA (Panel Janka)
+    # WIDOK DLA MECHANIKA
     # =============================================================
     st.title("🔧 Panel Mechanika")
     st.write("Wprowadź dane pojazdu, szczegóły naprawy oraz koszty.")
@@ -254,7 +262,6 @@ else:
         st.subheader("📊 Status i Czas")
         status = st.selectbox("Aktualny status naprawy", ["W kolejce", "Diagnoza / Rozkręcanie", "Naprawa w toku", "Testy końcowe", "Gotowe do odbioru! 🎉"])
         
-        # 🟢 NOWOŚĆ: Kalendarz i wybór czasu zamiast zwykłego pola tekstowego
         col_data, col_godzina = st.columns(2)
         with col_data:
             wybrana_data = st.date_input("Planowana data odbioru", value=datetime.now())
@@ -290,14 +297,13 @@ else:
         skonfiguruj = st.form_submit_button("Generuj Link i Gotową Wiadomość")
         
         if skonfiguruj:
-            # Automatyczne, ładne łączenie daty i godziny w tekst
             odbior_tekst = f"{wybrana_data.strftime('%d.%m.%Y')} o godz. {wybrana_godzina.strftime('%H:%M')}"
             
             paczka_danych = {
                 "auto": auto,
                 "nr_rej": nr_rej,
                 "status": status,
-                "odbior": odbior_tekst, # Przekazujemy sformatowany tekst do klienta i do PDF
+                "odbior": odbior_tekst,
                 "hamulce": hamulce,
                 "olej": olej,
                 "zawieszenie": zawieszenie,
