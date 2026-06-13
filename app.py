@@ -3,8 +3,9 @@ import json
 import base64
 import urllib.parse
 
-# Adres Twojej aplikacji wpisany na stałe:
+# 🔴 CONFIG: Wpisz tutaj stałe dane swojego warsztatu
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
+TELEFON_WARSZTATU = "48502826967"  # <-- WPISZ NUMER JANKA (kierunkowy 48 + 9 cyfr, bez spacji i plusów)
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
@@ -23,7 +24,7 @@ query_params = st.query_params
 
 if "view" in query_params:
     # =============================================================
-    # WIDOK DLA KLIENTA
+    # WIDOK DLA KLIENTA (Otwiera klient po kliknięciu w link)
     # =============================================================
     encoded_str = query_params["view"]
     data = decode_data(encoded_str)
@@ -68,6 +69,23 @@ if "view" in query_params:
             
         st.subheader(f"Razem do zapłaty: {suma:,.2f} PLN".replace(",", " "))
         
+        # 🟢 NOWOŚĆ: AKCEPTACJA NAPRAWY ONLINE PRZEZ KLIENTA
+        st.write("---")
+        st.subheader("✍️ Akceptacja naprawy online")
+        st.write("Jeśli zgadzasz się na powyższy kosztorys i zakres prac, kliknij przycisk poniżej. "
+                 "Wyśle to automatyczne potwierdzenie do warsztatu, a my od razu zamówimy części i bierzemy się do pracy!")
+        
+        # Wiadomość zwrotna od klienta do mechanika
+        tekst_akceptacji = (
+            f"Cześć! Akceptuję koszty i zakres naprawy mojego samochodu {data.get('auto')} ({data.get('nr_rej')}).\n"
+            f"Kwota podsumowania: {suma:,.2f} PLN.\n"
+            f"Proszę o informację, kiedy auto będzie gotowe do odbioru! 👍"
+        )
+        tekst_akceptacji_url = urllib.parse.quote(tekst_akceptacji)
+        link_do_mechanika = f"https://wa.me/{TELEFON_WARSZTATU}?text={tekst_akceptacji_url}"
+        
+        st.link_button("✅ AKCEPTUJĘ NAPRAWĘ I KOSZTY", link_do_mechanika, type="primary")
+        
         st.write("---")
         st.caption("Dziękujemy za zaufanie! W razie pytań prosimy o kontakt z warsztatem.")
     else:
@@ -75,7 +93,7 @@ if "view" in query_params:
 
 else:
     # =============================================================
-    # WIDOK DLA MECHANIKA
+    # WIDOK DLA MECHANIKA (Widzi tylko Janek)
     # =============================================================
     st.title("🔧 Panel Mechanika")
     st.write("Wprowadź dane pojazdu i wycenę, aby wygenerować link.")
@@ -121,25 +139,23 @@ else:
             
             st.success("🎉 Wszystko przygotowane!")
             
-            # Tworzenie wiadomości na WhatsApp
+            # Treść wiadomości od Janka do klienta
             tekst_wiadomosci = (
                 f"Cześć! Twój samochód {auto} ({nr_rej}) został sprawdzony w naszym warsztacie. "
                 f"Przygotowałem dla Ciebie cyfrowy raport stanu pojazdu wraz z wyceną naprawy. "
-                f"Zgłoszenie możesz zobaczyć tutaj: {pelny_link}"
+                f"Zgłoszenie i kosztorys możesz zaakceptować online tutaj: {pelny_link}"
             )
             tekst_url = urllib.parse.quote(tekst_wiadomosci)
             
-            # Formatowanie numeru telefonu
-            czysty_telefon = "".join(filter(str.isdigit, telefon))
-            if len(czysty_telefon) == 9:
-                czysty_telefon = "48" + czysty_telefon
+            czстый_telefon = "".join(filter(str.isdigit, telefon))
+            if len(czстый_telefon) == 9:
+                czстый_telefon = "48" + czстый_telefon
                 
-            if czysty_telefon:
-                wa_url = f"https://wa.me/{czysty_telefon}?text={tekst_url}"
+            if czстый_telefon:
+                wa_url = f"https://wa.me/{czстый_telefon}?text={tekst_url}"
             else:
                 wa_url = f"https://api.whatsapp.com/send?text={tekst_url}"
             
-            # Przycisk wysyłki WhatsApp
             st.link_button("📱 Wyślij raport przez WhatsApp", wa_url, type="primary")
             
             st.write("Alternatywnie możesz skopiować sam link ręcznie:")
