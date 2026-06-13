@@ -3,7 +3,7 @@ import json
 import base64
 
 # 🔴 TUTAJ WPISZ SWÓJ NOWY ADRES (np. https://super-warsztat.streamlit.app)
-MOJ_ADRES_APLIKACJI = "https://TUTAJ_WPISZ_SWOJ_NOWY_ADRES.streamlit.app"
+MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
