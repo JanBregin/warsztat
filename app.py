@@ -10,7 +10,7 @@ from datetime import datetime, time
 
 # Adres Twojej aplikacji wpisany na stałe:
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
+TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
@@ -29,7 +29,7 @@ def pobierz_czcionki():
             with open(pulpit_bold, "wb") as f: f.write(r.content)
     return pulpit_regular, pulpit_bold
 
-# Funkcja generująca plik PDF w locie (uwzględnia rabaty)
+# Funkcja generująca plik PDF w locie
 def generuj_pdf(data, suma_total, suma_czesci, c_robocizna, rabat_procent, kwota_rabatu):
     reg, bld = pobierz_czcionki()
     pdf = FPDF()
@@ -55,10 +55,15 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna, rabat_procent, kwota
     pdf.cell(0, 6, f"Status naprawy: {data.get('status', 'W kolejce')}")
     pdf.ln(6)
     if data.get('odbior'):
-        pdf.cell(0, 6, f"Planowany odbiór: {data.get('odbior')}")
+        pdf.cell(0, 6, f"Planowany odbiór: {data.get('odbior')}", ln=True)
+        pdf.ln(6)
+        
+    # Informacje o oleju w PDF
+    if data.get('poprzedni_olej'):
+        pdf.cell(0, 6, f"Poprzednia wymiana oleju: {data.get('poprzedni_olej')}")
         pdf.ln(6)
     if data.get('nastepny_olej'):
-        pdf.cell(0, 6, f"Następny olej przy: {data.get('nastepny_olej'):,} km".replace(",", " "))
+        pdf.cell(0, 6, f"Następna wymiana przy: {data.get('nastepny_olej'):,} km".replace(",", " "))
         pdf.ln(6)
     pdf.ln(4)
     
@@ -153,8 +158,18 @@ if "view" in query_params:
         if data.get('odbior'):
             st.warning(f"🕒 **Planowany odbiór pojazdu:** {data.get('odbior')}")
             
-        if data.get('nastepny_olej'):
-            st.metric(label="🛢️ Następna wymiana oleju przy przebiegu", value=f"{data.get('nastepny_olej'):,} km".replace(",", " "))
+        # SEKCOJA OLEJOWA DLA KLIENTA (ROZBUDOWANA)
+        if data.get('nastepny_olej') or data.get('poprzedni_olej'):
+            st.write(" ")
+            col_ol1, col_ol2 = st.columns(2)
+            with col_ol1:
+                if data.get('poprzedni_olej'):
+                    st.caption("⏮️ Poprzednia wymiana")
+                    st.markdown(f"**{data.get('poprzedni_olej')}**")
+            with col_ol2:
+                if data.get('nastepny_olej'):
+                    st.caption("⏭️ Kolejna wymiana przy")
+                    st.markdown(f"**{data.get('nastepny_olej'):,} km**".replace(",", " "))
             
         st.write("---")
         st.subheader("🔍 Stan techniczny podzespołów")
@@ -194,7 +209,6 @@ if "view" in query_params:
         c_robocizna = float(data.get('koszt_robocizny', 0))
         suma_przed_rabatem = suma_czesci + c_robocizna
         
-        # Logika obliczania rabatów dla widoku klienta
         rabat_procent = int(data.get('rabat', 0))
         kwota_rabatu = suma_przed_rabatem * (rabat_procent / 100)
         suma_total = suma_przed_rabatem - kwota_rabatu
@@ -259,7 +273,7 @@ if "view" in query_params:
 
 else:
     # =============================================================
-    # WIDOK DLA MECHANIKA (Panel Janka)
+    # WIDOK DLA MECHANIKA
     # =============================================================
     st.title("🔧 Panel Mechanika")
     st.write("Wprowadź dane pojazdu, szczegóły naprawy oraz koszty.")
@@ -280,15 +294,17 @@ else:
         with col_godzina:
             wybrana_godzina = st.time_input("Planowana godzina", value=time(16, 0))
         
-        # 🟢 NOWOŚĆ: BEZPIECZNA ORAZ ELASTYCZNA WYMIANA OLEJU (Dowolne kilometry)
+        # SERWIS OLEJOWY (ROZBUDOWANY O POPRZEDNIĄ WYMIANĘ)
         st.write("---")
         st.subheader("🛢️ Serwis olejowy")
         col_przebieg, col_interwal = st.columns(2)
         with col_przebieg:
             przebieg = st.number_input("Aktualny przebieg auta (km)", min_value=0, value=150000, step=1000)
         with col_interwal:
-            # Używamy st.number_input zamiast selectboxa, co pozwala wpisać KAŻDĄ wartość (np. 1000 km)
             interwal = st.number_input("Za ile km kolejna wymiana oleju?", min_value=500, max_value=30000, value=10000, step=500)
+        
+        # 🟢 NOWOŚĆ: Pole na informację o poprzednim serwisie olejowym
+        poprzedni_olej = st.text_input("Kiedy była poprzednia wymiana oleju? (data lub przebieg)", placeholder="np. 140 000 km / Marzec 2025")
         
         st.write("---")
         st.subheader("🔍 Stan techniczny")
@@ -306,8 +322,6 @@ else:
         st.write(" ")
         st.subheader("💵 Koszty i Rabaty")
         koszt_robocizny = st.number_input("Koszt robocizny / usługi (PLN)", min_value=0.0, step=50.0, value=0.0)
-        
-        # 🟢 NOWOŚĆ: SYSTEM SZYBKICH RABATÓW DLA STAŁYCH KLIENTÓW
         rabat = st.slider("Przyznaj rabat dla klienta (%)", min_value=0, max_value=50, value=0, step=5)
         
         skonfiguruj = st.form_submit_button("Generuj Link i Gotową Wiadomość")
@@ -327,7 +341,9 @@ else:
                 "nr_rej": nr_rej,
                 "status": status,
                 "odbior": odbior_tekst,
+                "przebieg_teraz": int(przebieg),
                 "nastepny_olej": int(nastepny_olej_calc),
+                "poprzedni_olej": poprzedni_olej, # Zapisujemy poprzednią wymianę
                 "hamulce": hamulce,
                 "olej": olej,
                 "zawieszenie": zawieszenie,
@@ -335,7 +351,7 @@ else:
                 "uwagi": uwagi,
                 "czesci": czesci_dane,
                 "koszt_robocizny": koszt_robocizny,
-                "rabat": rabat  # Dodajemy rabat do paczki przesyłanej w linku
+                "rabat": rabat
             }
             
             kod = encode_data(paczka_danych)
@@ -344,7 +360,6 @@ else:
             
             st.success("🎉 Wszystko przygotowane!")
             
-            # Obliczenia podsumowania do SMS/WhatsApp
             suma_czesci_calc = sum(float(c['cena']) for c in czesci_dane)
             przed_rabatem_calc = suma_czesci_calc + float(koszt_robocizny)
             suma_total_calc = przed_rabatem_calc - (przed_rabatem_calc * (rabat / 100))
@@ -356,7 +371,7 @@ else:
                     f"🎯 Dobre wieści! Twój samochód {auto} ({nr_rej}) jest już GOTOWY DO ODBIORU! 🎉\n\n"
                     f"💰 Ostateczny koszt naprawy{tekst_rabatu_sms}: {suma_total_calc:,.2f} PLN.\n"
                     f"📋 Pełne podsumowanie, wykaz części i raport PDF znajdziesz w linku: {pelny_link}\n\n"
-                    f"Zapraszamy po odbior auta! 🔧"
+                    f"Zapraszamy po odbiór auta! 🔧"
                 )
             else:
                 dodatek_status = f" Status prac: {status}. Odbiór: {odbior_tekst}."
@@ -366,7 +381,6 @@ else:
                 )
                 
             tekst_url = urllib.parse.quote(tekst_wiadomosci)
-            
             czysty_telefon = "".join(filter(str.isdigit, telefon))
             if len(czysty_telefon) == 9:
                 czysty_telefon = "48" + czysty_telefon
