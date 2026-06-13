@@ -5,10 +5,11 @@ import urllib.parse
 import os
 import requests
 from fpdf import FPDF
+from datetime import datetime, time
 
 # Adres Twojej aplikacji wpisany na stałe:
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
+TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
@@ -25,7 +26,7 @@ def pobierz_czcionki():
         with open(pulpit_bold, "wb") as f: f.write(r.content)
     return pulpit_regular, pulpit_bold
 
-# Funkcja generująca plik PDF w locie (Wersja w 100% bezpieczna dla fpdf2)
+# Funkcja generująca plik PDF w locie
 def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     reg, bld = pobierz_czcionki()
     
@@ -39,7 +40,7 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     pdf.cell(0, 12, "RAPORT STANU POJAZDU", align="C")
     pdf.ln(12)
     pdf.set_font("Roboto", "", 10)
-    pdf.cell(0, 6, "Cyfrowy Certyfikat Serwisowego", align="C")
+    pdf.cell(0, 6, "Cyfrowy Certyfikat Serwisowy", align="C")
     pdf.ln(12)
     
     # Sekcja: Dane Pojazdu
@@ -201,7 +202,6 @@ if "view" in query_params:
                 use_container_width=True
             )
         except Exception as e:
-            # 🔴 NOWOŚĆ: Wyświetli nam dokładny błąd jeśli coś pójdzie nie tak
             st.error(f"Nie udało się wygenerować pliku PDF. Szczegóły błędu: {e}")
         
         # Sekcja akceptacji
@@ -239,7 +239,7 @@ if "view" in query_params:
 
 else:
     # =============================================================
-    # WIDOK DLA MECHANIKA
+    # WIDOK DLA MECHANIKA (Panel Janka)
     # =============================================================
     st.title("🔧 Panel Mechanika")
     st.write("Wprowadź dane pojazdu, szczegóły naprawy oraz koszty.")
@@ -253,7 +253,13 @@ else:
         st.write("---")
         st.subheader("📊 Status i Czas")
         status = st.selectbox("Aktualny status naprawy", ["W kolejce", "Diagnoza / Rozkręcanie", "Naprawa w toku", "Testy końcowe", "Gotowe do odbioru! 🎉"])
-        odbior = st.text_input("Planowany czas odbioru", placeholder="np. Dzisiaj o 16:30")
+        
+        # 🟢 NOWOŚĆ: Kalendarz i wybór czasu zamiast zwykłego pola tekstowego
+        col_data, col_godzina = st.columns(2)
+        with col_data:
+            wybrana_data = st.date_input("Planowana data odbioru", value=datetime.now())
+        with col_godzina:
+            wybrana_godzina = st.time_input("Planowana godzina", value=time(16, 0))
         
         st.write("---")
         st.subheader("🔍 Stan techniczny")
@@ -284,11 +290,14 @@ else:
         skonfiguruj = st.form_submit_button("Generuj Link i Gotową Wiadomość")
         
         if skonfiguruj:
+            # Automatyczne, ładne łączenie daty i godziny w tekst
+            odbior_tekst = f"{wybrana_data.strftime('%d.%m.%Y')} o godz. {wybrana_godzina.strftime('%H:%M')}"
+            
             paczka_danych = {
                 "auto": auto,
                 "nr_rej": nr_rej,
                 "status": status,
-                "odbior": odbior,
+                "odbior": odbior_tekst, # Przekazujemy sformatowany tekst do klienta i do PDF
                 "hamulce": hamulce,
                 "olej": olej,
                 "zawieszenie": zawieszenie,
@@ -315,9 +324,7 @@ else:
                     f"Zapraszamy po odbiór auta do warsztatu! 🔧"
                 )
             else:
-                dodatek_status = f" Status prac: {status}."
-                if odbior:
-                    dodatek_status += f" Planowany odbiór: {odbior}."
+                dodatek_status = f" Status prac: {status}. Planowany odbiór: {odbior_tekst}."
                     
                 tekst_wiadomosci = (
                     f"Cześć! Twój samochód {auto} ({nr_rej}) został sprawdzony w naszym warsztacie.{dodatek_status} "
