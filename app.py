@@ -5,7 +5,7 @@ import urllib.parse
 
 # Adres Twojej aplikacji wpisany na stałe:
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka
+TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
@@ -41,7 +41,11 @@ if "view" in query_params:
         procenty = {"W kolejce": 10, "Diagnoza / Rozkręcanie": 35, "Naprawa w toku": 65, "Testy końcowe": 85, "Gotowe do odbioru! 🎉": 100}
         wartosc_procent = procenty.get(status_klienta, 10)
         st.progress(wartosc_procent / 100)
-        st.info(f"Etap: **{status_klienta}**")
+        
+        if status_klienta == "Gotowe do odbioru! 🎉":
+            st.success(f"🟢 **Status: {status_klienta}**")
+        else:
+            st.info(f"Etap: **{status_klienta}**")
         
         if data.get('odbior'):
             st.warning(f"🕒 **Planowany odbiór pojazdu:** {data.get('odbior')}")
@@ -93,41 +97,44 @@ if "view" in query_params:
             
         st.subheader(f"Razem do zapłaty: {suma_total:,.2f} PLN".replace(",", " "))
         
-        # 🟢 NOWOŚĆ: SEKCOJA AKCEPTACJI I FORMULARZA FAKTURY PO STRONIE KLIENTA
-        st.write("---")
-        st.subheader("✍️ Akceptacja naprawy online")
-        st.write("Jeśli zgadzasz się na zakres prac i kosztorys, potwierdź zamówienie poniżej.")
-        
-        # Suwak i pola faktury dla KLIENTA
-        chce_fakture = st.toggle("Chcę otrzymać fakturę VAT (na firmę)")
-        
-        faktura_dodatek_sms = ""
-        if chce_fakture:
-            firma_klient = st.text_input("Pełna nazwa firmy")
-            nip_klient = st.text_input("Numer NIP")
-            if firma_klient or nip_klient:
-                faktura_dodatek_sms = f"\n\n📄 DANE DO FAKTURY VAT:\n• Firma: {firma_klient}\n• NIP: {nip_klient}"
-            else:
-                faktura_dodatek_sms = f"\n\n📄 [Klient zaznaczył prośbę o fakturę VAT, ale nie uzupełnił danych]"
+        # Sekcja akceptacji - chowa się, gdy auto jest już naprawione i gotowe
+        if status_klienta != "Gotowe do odbioru! 🎉":
+            st.write("---")
+            st.subheader("✍️ Akceptacja naprawy online")
+            st.write("Jeśli zgadzasz się na zakres prac i kosztorys, potwierdź zamówienie poniżej.")
+            
+            chce_fakture = st.toggle("Chcę otrzymać fakturę VAT (na firmę)")
+            
+            faktura_dodatek_sms = ""
+            if chce_fakture:
+                firma_klient = st.text_input("Pełna nazwa firmy")
+                nip_klient = st.text_input("Numer NIP")
+                if firma_klient or nip_klient:
+                    faktura_dodatek_sms = f"\n\n📄 DANE DO FAKTURY VAT:\n• Firma: {firma_klient}\n• NIP: {nip_klient}"
+                else:
+                    faktura_dodatek_sms = f"\n\n📄 [Klient poprosił o fakturę VAT, brak danych]"
 
-        # Budowanie wiadomości zwrotnej od klienta do Janka (z danymi faktury jeśli wpisane!)
-        tekst_akceptacji = (
-            f"Cześć! Akceptuję koszty i zakres naprawy mojego samochodu {data.get('auto')} ({data.get('nr_rej')}).\n"
-            f"Kwota podsumowania: {suma_total:,.2f} PLN.{faktura_dodatek_sms}\n"
-            f"Proszę o informację, kiedy auto będzie gotowe do odbioru! 👍"
-        )
-        tekst_akceptacji_url = urllib.parse.quote(tekst_akceptacji)
-        link_do_mechanika = f"https://wa.me/{TELEFON_WARSZTATU}?text={tekst_akceptacji_url}"
-        
-        st.write(" ")
-        st.link_button("✅ AKCEPTUJĘ NAPRAWĘ I KOSZTY", link_do_mechanika, type="primary")
+            tekst_akceptacji = (
+                f"Cześć! Akceptuję koszty i zakres naprawy mojego samochodu {data.get('auto')} ({data.get('nr_rej')}).\n"
+                f"Kwota podsumowania: {suma_total:,.2f} PLN.{faktura_dodatek_sms}\n"
+                f"Proszę o informację, kiedy auto będzie gotowe do odbioru! 👍"
+            )
+            tekst_akceptacji_url = urllib.parse.quote(tekst_akceptacji)
+            link_do_mechanika = f"https://wa.me/{TELEFON_WARSZTATU}?text={tekst_akceptacji_url}"
+            
+            st.write(" ")
+            st.link_button("✅ AKCEPTUJĘ NAPRAWĘ I KOSZTY", link_do_mechanika, type="primary")
+        else:
+            st.write("---")
+            st.success("🚗 Samochód pomyślnie przeszedł wszystkie testy końcowe i oczekuje na odbiór w warsztacie!")
+            
         st.caption("Dziękujemy za zaufanie!")
     else:
         st.error("Błąd! Link jest nieprawidłowy.")
 
 else:
     # =============================================================
-    # WIDOK DLA MECHANIKA (Czysty, szybki formularz Janka)
+    # WIDOK DLA MECHANIKA (Panel Janka)
     # =============================================================
     st.title("🔧 Panel Mechanika")
     st.write("Wprowadź dane pojazdu, szczegóły naprawy oraz koszty.")
@@ -148,70 +155,4 @@ else:
         hamulce = st.selectbox("Stan hamulców", ["Stan dobry (OK)", "Do wymiany wkrótce", "Wymiana PILNA!"])
         olej = st.selectbox("Olej i filtry", ["Stan dobry (OK)", "Do wymiany", "Wymieniono podczas wizyty"])
         zawieszenie = st.selectbox("Zawieszenie", ["Stan dobry (OK)", "Wykryto luzy", "Wymaga pilnej naprawy"])
-        opony = st.selectbox("Stan opon", ["Stan dobry (OK)", "Bieżnik na wykończeniu", "Zalecana wymiana"])
-        uwagi = st.text_area("Dodatkowe uwagi / co zostało zrobione")
-        
-        st.write("---")
-        st.subheader("⚙️ Koszt poszczególnych części")
-        st.write("Wpisz nazwy części i ceny. Puste pola zostaną zignorowane.")
-        
-        czesci_dane = []
-        for i in range(1, 5):
-            col_n, col_c = st.columns([2, 1])
-            with col_n:
-                c_nazwa = st.text_input(f"Nazwa części {i}", key=f"nazwa_{i}", placeholder=f"np. Pozycja {i}")
-            with col_c:
-                c_cena = st.number_input(f"Cena {i} (PLN)", key=f"cena_{i}", min_value=0.0, step=10.0, value=0.0)
-            
-            if c_nazwa:
-                czesci_dane.append({"nazwa": c_nazwa, "cena": c_cena})
-                
-        st.write(" ")
-        st.subheader("💵 Koszt robocizny")
-        koszt_robocizny = st.number_input("Koszt robocizny / usługi", min_value=0.0, step=50.0, value=0.0)
-        
-        skonfiguruj = st.form_submit_button("Generuj Link i Gotową Wiadomość")
-        
-        if skonfiguruj:
-            paczka_danych = {
-                "auto": auto,
-                "nr_rej": nr_rej,
-                "status": status,
-                "odbior": odbior,
-                "hamulce": hamulce,
-                "olej": olej,
-                "zawieszenie": zawieszenie,
-                "opony": opony,
-                "uwagi": uwagi,
-                "czesci": czesci_dane,
-                "koszt_robocizny": koszt_robocizny
-            }
-            
-            kod = encode_data(paczka_danych)
-            czysty_url = MOJ_ADRES_APLIKACJI.strip(" /")
-            pelny_link = f"{czysty_url}/?view={kod}"
-            
-            st.success("🎉 Wszystko przygotowane!")
-            
-            dodatek_status = f" Status: {status}."
-            if odbior:
-                dodatek_status += f" Odbiór: {odbior}."
-                
-            tekst_wiadomosci = (
-                f"Cześć! Twój samochód {auto} ({nr_rej}) został sprawdzony w naszym warsztacie.{dodatek_status} "
-                f"Szczegółowe rozbicie kosztów części oraz podsumowanie znajdziesz w linku, gdzie możesz również zatwierdzić naprawę online: {pelny_link}"
-            )
-            tekst_url = urllib.parse.quote(tekst_wiadomosci)
-            
-            czysty_telefon = "".join(filter(str.isdigit, telefon))
-            if len(czysty_telefon) == 9:
-                czysty_telefon = "48" + czysty_telefon
-                
-            if czysty_telefon:
-                wa_url = f"https://wa.me/{czysty_telefon}?text={tekst_url}"
-            else:
-                wa_url = f"https://api.whatsapp.com/send?text={tekst_url}"
-            
-            st.link_button("📱 Wyślij raport przez WhatsApp", wa_url, type="primary")
-            st.write("Link pomocniczy:")
-            st.code(pelny_link)
+        opony = st.selectbox("Stan opon",
