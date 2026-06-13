@@ -155,4 +155,84 @@ else:
         hamulce = st.selectbox("Stan hamulców", ["Stan dobry (OK)", "Do wymiany wkrótce", "Wymiana PILNA!"])
         olej = st.selectbox("Olej i filtry", ["Stan dobry (OK)", "Do wymiany", "Wymieniono podczas wizyty"])
         zawieszenie = st.selectbox("Zawieszenie", ["Stan dobry (OK)", "Wykryto luzy", "Wymaga pilnej naprawy"])
-        opony = st.selectbox("Stan opon",
+        opony = st.selectbox("Stan opon", ["Stan dobry (OK)", "Bieżnik na wykończeniu", "Zalecana wymiana"])
+        uwagi = st.text_area("Dodatkowe uwagi / co zostało zrobione")
+        
+        st.write("---")
+        st.subheader("⚙️ Koszt poszczególnych części")
+        
+        czesci_dane = []
+        for i in range(1, 5):
+            col_n, col_c = st.columns([2, 1])
+            with col_n:
+                c_nazwa = st.text_input(f"Nazwa części {i}", key=f"nazwa_{i}", placeholder=f"np. Pozycja {i}")
+            with col_c:
+                c_cena = st.number_input(f"Cena {i} (PLN)", key=f"cena_{i}", min_value=0.0, step=10.0, value=0.0)
+            
+            if c_nazwa:
+                czesci_dane.append({"nazwa": c_nazwa, "cena": c_cena})
+                
+        st.write(" ")
+        st.subheader("💵 Koszt robocizny")
+        koszt_robocizny = st.number_input("Koszt robocizny / usługi", min_value=0.0, step=50.0, value=0.0)
+        
+        skonfiguruj = st.form_submit_button("Generuj Link i Gotową Wiadomość")
+        
+        if skonfiguruj:
+            paczka_danych = {
+                "auto": auto,
+                "nr_rej": nr_rej,
+                "status": status,
+                "odbior": odbior,
+                "hamulce": hamulce,
+                "olej": olej,
+                "zawieszenie": zawieszenie,
+                "opony": opony,
+                "uwagi": uwagi,
+                "czesci": czesci_dane,
+                "koszt_robocizny": koszt_robocizny
+            }
+            
+            kod = encode_data(paczka_danych)
+            czysty_url = MOJ_ADRES_APLIKACJI.strip(" /")
+            pelny_link = f"{czysty_url}/?view={kod}"
+            
+            st.success("🎉 Wszystko przygotowane!")
+            
+            # Wyliczamy sumę końcową do wiadomości SMS
+            suma_czesci_calc = sum(float(c['cena']) for c in czesci_dane)
+            suma_total_calc = suma_czesci_calc + float(koszt_robocizny)
+            
+            # 🟢 DYNAMICZNA ZMIANA TEKSTU WHATSAPP W ZALEŻNOŚCI OD STATUSU
+            if status == "Gotowe do odbioru! 🎉":
+                tekst_wiadomosci = (
+                    f"🎯 Dobre wieści! Twój samochód {auto} ({nr_rej}) jest już GOTOWY DO ODBIORU! 🎉\n\n"
+                    f"💰 Ostateczny koszt naprawy: {suma_total_calc:,.2f} PLN.\n"
+                    f"📋 Pełne podsumowanie i wykaz użytych części znajdziesz w linku: {pelny_link}\n\n"
+                    f"Zapraszamy po odbiór auta do warsztatu! 🔧"
+                )
+            else:
+                dodatek_status = f" Status prac: {status}."
+                if odbior:
+                    dodatek_status += f" Planowany odbiór: {odbior}."
+                    
+                tekst_wiadomosci = (
+                    f"Cześć! Twój samochód {auto} ({nr_rej}) został sprawdzony w naszym warsztacie.{dodatek_status} "
+                    f"Szczegółowe rozbicie kosztów części oraz stan techniczny znajdziesz pod tym linkiem, "
+                    f"gdzie możesz również zatwierdzić naprawę online: {pelny_link}"
+                )
+                
+            tekst_url = urllib.parse.quote(tekst_wiadomosci)
+            
+            czysty_telefon = "".join(filter(str.isdigit, telefon))
+            if len(czysty_telefon) == 9:
+                czysty_telefon = "48" + czysty_telefon
+                
+            if czysty_telefon:
+                wa_url = f"https://wa.me/{czysty_telefon}?text={tekst_url}"
+            else:
+                wa_url = f"https://api.whatsapp.com/send?text={tekst_url}"
+            
+            st.link_button("📱 Wyślij raport przez WhatsApp", wa_url, type="primary")
+            st.write("Link pomocniczy:")
+            st.code(pelny_link)
