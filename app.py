@@ -4,6 +4,7 @@ import base64
 import urllib.parse
 import os
 import requests
+import pandas as pd
 from fpdf import FPDF
 from datetime import datetime, time
 
@@ -13,10 +14,9 @@ TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
-# Funkcja automatycznie pobierająca polskie czcionki z oficjalnego GitHuba Google Fonts
+# Funkcja automatycznie pobierająca polskie czcionki z GitHuba Google Fonts
 @st.cache_data
 def pobierz_czcionki():
-    # Zmieniamy nazwy na -v2, aby wymusić usunięcie starego, uszkodzonego pliku z pamięci chmury
     pulpit_regular = "Roboto-Regular-v2.ttf"
     pulpit_bold = "Roboto-Bold-v2.ttf"
     
@@ -39,7 +39,6 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     pdf = FPDF()
     pdf.add_page()
     
-    # Rejestracja czcionek wspierających polskie znaki
     pdf.add_font("Roboto", "", reg)
     pdf.add_font("Roboto", "B", bld)
     
@@ -277,18 +276,13 @@ else:
         uwagi = st.text_area("Dodatkowe uwagi / co zostało zrobione")
         
         st.write("---")
-        st.subheader("⚙️ Koszt poszczególnych części")
+        # 🟢 NOWOŚĆ: INTERAKTYWNA TABELA Z PLUSIKIEM (Dla dowolnej liczby części)
+        st.subheader("⚙️ Wykaz i koszt użytych części")
+        st.write("Kliknij ikonkę **+** (Add row) na dole tabeli, aby dodać kolejną pozycję.")
         
-        czesci_dane = []
-        for i in range(1, 5):
-            col_n, col_c = st.columns([2, 1])
-            with col_n:
-                c_nazwa = st.text_input(f"Nazwa części {i}", key=f"nazwa_{i}", placeholder=f"np. Pozycja {i}")
-            with col_c:
-                c_cena = st.number_input(f"Cena {i} (PLN)", key=f"cena_{i}", min_value=0.0, step=10.0, value=0.0)
-            
-            if c_nazwa:
-                czesci_dane.append({"nazwa": c_nazwa, "cena": c_cena})
+        # Tworzymy początkowy wiersz w tabeli
+        init_df = pd.DataFrame([{"Nazwa części": "", "Cena (PLN)": 0.0}])
+        tabela_czesci = st.data_editor(init_df, num_rows="dynamic", use_container_width=True)
                 
         st.write(" ")
         st.subheader("💵 Koszt robocizny")
@@ -298,6 +292,16 @@ else:
         
         if skonfiguruj:
             odbior_tekst = f"{wybrana_data.strftime('%d.%m.%Y')} o godz. {wybrana_godzina.strftime('%H:%M')}"
+            
+            # 🟢 NOWOŚĆ: Przetwarzanie dynamicznej tabeli i filtrowanie pustych wierszy
+            czesci_dane = []
+            for _, row in tabela_czesci.iterrows():
+                nazwa_raw = str(row["Nazwa części"]).strip()
+                if exam_name := nazwa_raw:  # Dodajemy tylko wiersze, gdzie wpisano nazwę części
+                    czesci_dane.append({
+                        "nazwa": exam_name,
+                        "cena": float(row["Cena (PLN)"])
+                    })
             
             paczka_danych = {
                 "auto": auto,
