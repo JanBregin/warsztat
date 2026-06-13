@@ -2,10 +2,11 @@ import streamlit as st
 import json
 import base64
 
-# Ustawienia strony - mobilny wygląd
+# 🔴 TUTAJ WPISZ SWÓJ NOWY ADRES (np. https://super-warsztat.streamlit.app)
+MOJ_ADRES_APLIKACJI = "https://TUTAJ_WPISZ_SWOJ_NOWY_ADRES.streamlit.app"
+
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
-# Funkcje do kodowania i dekodowania danych w URL (zastępuje bazę danych)
 def encode_data(data_dict):
     json_str = json.dumps(data_dict)
     return base64.urlsafe_b64encode(json_str.encode()).decode()
@@ -17,13 +18,10 @@ def decode_data(encoded_str):
     except:
         return None
 
-# Odczytanie parametrów z linku
 query_params = st.query_params
 
 if "view" in query_params:
-    # -------------------------------------------------------------
-    # WIDOK DLA KLIENTA (gdy ktoś wejdzie przez wygenerowany link)
-    # -------------------------------------------------------------
+    # WIDOK DLA KLIENTA
     encoded_str = query_params["view"]
     data = decode_data(encoded_str)
     
@@ -33,7 +31,6 @@ if "view" in query_params:
         st.caption(f"Numer rejestracyjny: {data.get('nr_rej', 'Brak')}")
         st.write("---")
         
-        # Funkcja do ładnego wyświetlania statusów z kolorami
         def wyświetl_status(komponent, status):
             if "dobry" in status.lower() or "ok" in status.lower():
                 st.success(f"✅ **{komponent}:** {status}")
@@ -52,14 +49,12 @@ if "view" in query_params:
             st.info(f"💬 **Uwagi mechanika:**\n\n{data.get('uwagi')}")
             
         st.write("---")
-        st.caption("Dziękujemy za skorzystanie z naszych usług! Twój Warsztat.")
+        st.caption("Dziękujemy za skorzystanie z naszych usług!")
     else:
-        st.error("Błąd! Link jest nieprawidłowy lub uszkodzony.")
+        st.error("Błąd! Link jest nieprawidłowy.")
 
 else:
-    # -------------------------------------------------------------
-    # WIDOK DLA MECHANIKA (gdy otwierasz czystą aplikację)
-    # -------------------------------------------------------------
+    # WIDOK DLA MECHANIKA
     st.title("🔧 Panel Mechanika")
     st.write("Wprowadź dane pojazdu, aby wygenerować link dla klienta.")
     
@@ -78,7 +73,6 @@ else:
         skonfiguruj = st.form_submit_button("Generuj Link dla Klienta")
         
         if skonfiguruj:
-            # Pakujemy dane do słownika
             paczka_danych = {
                 "auto": auto,
                 "nr_rej": nr_rej,
@@ -91,11 +85,12 @@ else:
             
             kod = encode_data(paczka_danych)
             
-            st.success("🎉 Link wygenerowany!")
+            # Tworzymy pełny, gotowy link
+            czysty_url = MOJ_ADRES_APLIKACJI.strip("/")
+            pelny_link = f"{czysty_url}/?view={kod}"
             
-            # Instrukcja dla mechanika
-            st.write("Kopiuj końcówkę linku i doklej ją do adresu swojej strony na telefonie:")
-            st.code(f"?view={kod}")
+            st.success("🎉 Link wygenerowany pomyślnie!")
+            st.write("Skopiuj poniższy link i wyślij go klientowi (SMS / WhatsApp):")
             
-            st.info("💡 Jak to będzie działać w sieci?\nJeśli Twoja apka będzie wisieć pod adresem `https://warsztat.streamlit.app`, to pełny link dla klienta to:\n"
-                    f"`https://warsztat.streamlit.app/?view={kod}`")
+            # Okienko z linkiem, które na iPhonie można łatwo skopiować jednym kliknięciem
+            st.code(pelny_link)
