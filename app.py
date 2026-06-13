@@ -14,17 +14,19 @@ TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
-# Funkcja pobierająca polskie czcionki do PDF
+# Funkcja pobierająca polskie czcionki do PDF z oficjalnego repozytorium Google
 @st.cache_data
 def pobierz_czcionki():
     pulpit_regular = "Roboto-Regular-v2.ttf"
     pulpit_bold = "Roboto-Bold-v2.ttf"
     if not os.path.exists(pulpit_regular):
         r = requests.get("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf")
-        if r.status_code == 200: with open(pulpit_regular, "wb") as f: f.write(r.content)
+        if r.status_code == 200: 
+            with open(pulpit_regular, "wb") as f: f.write(r.content)
     if not os.path.exists(pulpit_bold):
         r = requests.get("https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf")
-        if r.status_code == 200: with open(pulpit_bold, "wb") as f: f.write(r.content)
+        if r.status_code == 200: 
+            with open(pulpit_bold, "wb") as f: f.write(r.content)
     return pulpit_regular, pulpit_bold
 
 # Funkcja generująca plik PDF
@@ -142,7 +144,6 @@ if "view" in query_params:
         if data.get('odbior'):
             st.warning(f"🕒 **Planowany odbiór pojazdu:** {data.get('odbior')}")
             
-        # 🟢 NOWOŚĆ: PRZYPOMINAJKA O OLEJU DLA KLIENTA
         if data.get('nastepny_olej'):
             st.metric(label="🛢️ Następna wymiana oleju przy przebiegu", value=f"{data.get('nastepny_olej'):,} km".replace(",", " "))
             
@@ -237,7 +238,6 @@ else:
         with col_data: wybrana_data = st.date_input("Planowana data odbioru", value=datetime.now())
         with col_godzina: wybrana_godzina = st.time_input("Planowana godzina", value=time(16, 0))
         
-        # 🟢 NOWOŚĆ: POLA DO WYMIANY OLEJU DLA JANKA
         st.write("---")
         st.subheader("🛢️ Serwis olejowy")
         col_przebieg, col_interwal = st.columns(2)
@@ -287,9 +287,9 @@ else:
             suma_czesci_calc = sum(float(c['cena']) for c in czesci_dane)
             suma_total_calc = suma_czesci_calc + float(koszt_robocizny)
             
-            # 🟢 NOWOŚĆ: AUTOMATYCZNY ZAPIS DO BAZY DANYCH (GOOGLE SHEETS)
+            # 🟢 AUTOMATYCZNY ZAPIS DO BAZY GOOGLE SHEETS (POPRAWIONY IMPORT)
             try:
-                from streamlit_gsheets_connection import GSheetsConnection
+                from streamlit_gsheets import GSheetsConnection
                 conn = st.connection("gsheets", type=GSheetsConnection)
                 
                 nowy_wiersz = {
