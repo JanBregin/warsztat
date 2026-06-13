@@ -8,7 +8,7 @@ from fpdf import FPDF
 
 # Adres Twojej aplikacji wpisany na stałe:
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka
+TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
@@ -25,7 +25,7 @@ def pobierz_czcionki():
         with open(pulpit_bold, "wb") as f: f.write(r.content)
     return pulpit_regular, pulpit_bold
 
-# Funkcja generująca plik PDF w locie
+# Funkcja generująca plik PDF w locie (Wersja w 100% bezpieczna dla fpdf2)
 def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     reg, bld = pobierz_czcionki()
     
@@ -36,56 +36,69 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     
     # Nagłówek raportu
     pdf.set_font("Roboto", "B", 20)
-    pdf.cell(0, 12, "RAPORT STANU POJAZDU", ln=True, align="C")
+    pdf.cell(0, 12, "RAPORT STANU POJAZDU", align="C")
+    pdf.ln(12)
     pdf.set_font("Roboto", "", 10)
-    pdf.cell(0, 6, "Cyfrowy Certyfikat Serwisowy", ln=True, align="C")
-    pdf.ln(10)
+    pdf.cell(0, 6, "Cyfrowy Certyfikat Serwisowego", align="C")
+    pdf.ln(12)
     
     # Sekcja: Dane Pojazdu
     pdf.set_font("Roboto", "B", 14)
-    pdf.cell(0, 8, f"🚗 Pojazd: {data.get('auto', 'Nie podano')}", ln=True)
-    pdf.set_font("Roboto", "", 11)
-    pdf.cell(0, 6, f"Numer rejestracyjny: {data.get('nr_rej', 'Nie podano')}", ln=True)
-    pdf.cell(0, 6, f"Status naprawy: {data.get('status', 'W kolejce')}", ln=True)
-    if data.get('odbior'):
-        pdf.cell(0, 6, f"Planowany odbiór: {data.get('odbior')}", ln=True)
+    pdf.cell(0, 8, f"🚗 Pojazd: {data.get('auto', 'Nie podano')}")
     pdf.ln(8)
+    pdf.set_font("Roboto", "", 11)
+    pdf.cell(0, 6, f"Numer rejestracyjny: {data.get('nr_rej', 'Nie podano')}")
+    pdf.ln(6)
+    pdf.cell(0, 6, f"Status naprawy: {data.get('status', 'W kolejce')}")
+    pdf.ln(6)
+    if data.get('odbior'):
+        pdf.cell(0, 6, f"Planowany odbiór: {data.get('odbior')}")
+        pdf.ln(6)
+    pdf.ln(4)
     
     # Sekcja: Stan Techniczny
     pdf.set_font("Roboto", "B", 14)
-    pdf.cell(0, 8, "🔍 Wyniki weryfikacji technicznej:", ln=True)
+    pdf.cell(0, 8, "🔍 Wyniki weryfikacji technicznej:")
+    pdf.ln(8)
     pdf.set_font("Roboto", "", 11)
-    pdf.cell(0, 6, f"• Hamulce: {data.get('hamulce', 'Brak danych')}", ln=True)
-    pdf.cell(0, 6, f"• Olej silnikowy: {data.get('olej', 'Brak danych')}", ln=True)
-    pdf.cell(0, 6, f"• Zawieszenie: {data.get('zawieszenie', 'Brak danych')}", ln=True)
-    pdf.cell(0, 6, f"• Opony: {data.get('opony', 'Brak danych')}", ln=True)
+    pdf.cell(0, 6, f"• Hamulce: {data.get('hamulce', 'Brak danych')}")
     pdf.ln(6)
+    pdf.cell(0, 6, f"• Olej silnikowy: {data.get('olej', 'Brak danych')}")
+    pdf.ln(6)
+    pdf.cell(0, 6, f"• Zawieszenie: {data.get('zawieszenie', 'Brak danych')}")
+    pdf.ln(6)
+    pdf.cell(0, 6, f"• Opony: {data.get('opony', 'Brak danych')}")
+    pdf.ln(8)
     
     if data.get('uwagi'):
         pdf.set_font("Roboto", "B", 12)
-        pdf.cell(0, 6, "💬 Uwagi i zalecenia mechanika:", ln=True)
+        pdf.cell(0, 6, "💬 Uwagi i zalecenia mechanika:")
+        pdf.ln(6)
         pdf.set_font("Roboto", "", 11)
         pdf.multi_cell(0, 6, data.get('uwagi'))
         pdf.ln(6)
         
     # Sekcja: Kosztorys
     pdf.set_font("Roboto", "B", 14)
-    pdf.cell(0, 8, "💰 Szczegółowy kosztorys:", ln=True)
+    pdf.cell(0, 8, "💰 Szczegółowy kosztorys:")
+    pdf.ln(8)
     pdf.set_font("Roboto", "", 11)
     
     czesci_lista = data.get('czesci', [])
     if czesci_lista:
         for czesc in czesci_lista:
-            pdf.cell(0, 6, f"  - {czesc['nazwa']}: {float(czesc['cena']):,.2f} PLN", ln=True)
+            pdf.cell(0, 6, f"  - {czesc['nazwa']}: {float(czesc['cena']):,.2f} PLN")
+            pdf.ln(6)
     
     pdf.ln(4)
-    pdf.cell(0, 6, f"Suma za części: {suma_czesci:,.2f} PLN", ln=True)
-    pdf.cell(0, 6, f"Koszt robocizny / usługi: {c_robocizna:,.2f} PLN", ln=True)
+    pdf.cell(0, 6, f"Suma za części: {suma_czesci:,.2f} PLN")
+    pdf.ln(6)
+    pdf.cell(0, 6, f"Koszt robocizny / usługi: {c_robocizna:,.2f} PLN")
+    pdf.ln(8)
     pdf.set_font("Roboto", "B", 13)
-    pdf.cell(0, 10, f"RAZEM DO ZAPŁATY: {suma_total:,.2f} PLN", ln=True)
+    pdf.cell(0, 10, f"RAZEM DO ZAPŁATY: {suma_total:,.2f} PLN")
+    pdf.ln(10)
     
-    # Sekcja: Faktura (jeśli klient wybrał)
-    # W bezbazowej wersji PDF wygeneruje się po stronie klienta, więc sprawdzamy stan formularza
     return pdf.output()
 
 def encode_data(data_dict):
@@ -175,7 +188,7 @@ if "view" in query_params:
             
         st.subheader(f"Razem do zapłaty: {suma_total:,.2f} PLN".replace(",", " "))
         
-        # 🟢 NOWOŚĆ: GENEROWANIE I POBIERANIE PDF PRZEZ KLIENTA
+        # POBIERANIE PDF
         st.write("---")
         st.subheader("📥 Pobierz dokument")
         try:
@@ -188,7 +201,8 @@ if "view" in query_params:
                 use_container_width=True
             )
         except Exception as e:
-            st.error("Nie udało się wygenerować pliku PDF. Zgłoś to do warsztatu.")
+            # 🔴 NOWOŚĆ: Wyświetli nam dokładny błąd jeśli coś pójdzie nie tak
+            st.error(f"Nie udało się wygenerować pliku PDF. Szczegóły błędu: {e}")
         
         # Sekcja akceptacji
         if status_klienta != "Gotowe do odbioru! 🎉":
