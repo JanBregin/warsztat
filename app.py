@@ -3,9 +3,9 @@ import json
 import base64
 import urllib.parse
 
-# 🔴 CONFIG: Wpisz tutaj stałe dane swojego warsztatu
+# 🔴 CONFIG: Dane Twojego warsztatu (wpisane na stałe)
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48502826967"  # <-- WPISZ NUMER JANKA (kierunkowy 48 + 9 cyfr, bez spacji i plusów)
+TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka, gdy będziecie gotowi
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
@@ -34,6 +34,24 @@ if "view" in query_params:
         st.subheader(f"🚗 {data.get('auto', 'Samochód')}")
         st.caption(f"Numer rejestracyjny: {data.get('nr_rej', 'Brak')}")
         st.write("---")
+        
+        # 🟢 NOWOŚĆ: PASEK POSTĘPU NAPRAWY DLA KLIENTA
+        st.subheader("⏳ Aktualny status prac")
+        status_klienta = data.get('status', 'W kolejce')
+        
+        # Logika graficznego paska postępu
+        procenty = {"W kolejce": 10, "Diagnoza / Rozkręcanie": 35, "Naprawa w toku": 65, "Testy końcowe": 85, "Gotowe do odbioru! 🎉": 100}
+        wartosc_procent = procenty.get(status_klienta, 10)
+        
+        st.progress(wartosc_procent / 100)
+        st.info(f"Etap: **{status_klienta}**")
+        
+        # 🟢 NOWOŚĆ: PLANOWANY ODBIÓR DLA KLIENTA
+        if data.get('odbior'):
+            st.warning(f"🕒 **Planowany odbiór pojazdu:** {data.get('odbior')}")
+            
+        st.write("---")
+        st.subheader("🔍 Stan techniczny podzespołów")
         
         # Statusy z kolorami
         def wyświetl_status(komponent, status):
@@ -69,13 +87,12 @@ if "view" in query_params:
             
         st.subheader(f"Razem do zapłaty: {suma:,.2f} PLN".replace(",", " "))
         
-        # 🟢 NOWOŚĆ: AKCEPTACJA NAPRAWY ONLINE PRZEZ KLIENTA
+        # AKCEPTACJA NAPRAWY ONLINE PRZEZ KLIENTA
         st.write("---")
         st.subheader("✍️ Akceptacja naprawy online")
         st.write("Jeśli zgadzasz się na powyższy kosztorys i zakres prac, kliknij przycisk poniżej. "
-                 "Wyśle to automatyczne potwierdzenie do warsztatu, a my od razu zamówimy części i bierzemy się do pracy!")
+                 "Wyśle to automatyczne potwierdzenie do warsztatu.")
         
-        # Wiadomość zwrotna od klienta do mechanika
         tekst_akceptacji = (
             f"Cześć! Akceptuję koszty i zakres naprawy mojego samochodu {data.get('auto')} ({data.get('nr_rej')}).\n"
             f"Kwota podsumowania: {suma:,.2f} PLN.\n"
@@ -96,13 +113,19 @@ else:
     # WIDOK DLA MECHANIKA (Widzi tylko Janek)
     # =============================================================
     st.title("🔧 Panel Mechanika")
-    st.write("Wprowadź dane pojazdu i wycenę, aby wygenerować link.")
+    st.write("Wprowadź dane pojazdu, status oraz wycenę, aby wygenerować link.")
     
     with st.form("mechanic_form"):
         st.subheader("📝 Dane pojazdu i klienta")
         auto = st.text_input("Marka i model", placeholder="np. Audi A4 B8")
         nr_rej = st.text_input("Numer rejestracyjny", placeholder="np. WI 12345")
         telefon = st.text_input("Numer telefonu klienta (np. 500600700)", placeholder="Bez kierunkowego +48")
+        
+        st.write("---")
+        # 🟢 NOWOŚĆ: SEKCOJA STATUSU I CZASU ODBIORU DLA JANKA
+        st.subheader("📊 Status i Czas")
+        status = st.selectbox("Aktualny status naprawy", ["W kolejce", "Diagnoza / Rozkręcanie", "Naprawa w toku", "Testy końcowe", "Gotowe do odbioru! 🎉"])
+        odbior = st.text_input("Planowany czas odbioru", placeholder="np. Dzisiaj o 16:30 / Jutro do południa")
         
         st.write("---")
         st.subheader("🔍 Stan techniczny")
@@ -124,6 +147,8 @@ else:
             paczka_danych = {
                 "auto": auto,
                 "nr_rej": nr_rej,
+                "status": status,
+                "odbior": odbior,
                 "hamulce": hamulce,
                 "olej": olej,
                 "zawieszenie": zawieszenie,
@@ -139,24 +164,26 @@ else:
             
             st.success("🎉 Wszystko przygotowane!")
             
-            # Treść wiadomości od Janka do klienta
+            # Dostosowanie wiadomości na WhatsApp z uwzględnieniem statusu
+            dodatek_status = f" Aktualny status: {status}."
+            if odbior:
+                dodatek_status += f" Planowany odbiór: {odbior}."
+                
             tekst_wiadomosci = (
-                f"Cześć! Twój samochód {auto} ({nr_rej}) został sprawdzony w naszym warsztacie. "
-                f"Przygotowałem dla Ciebie cyfrowy raport stanu pojazdu wraz z wyceną naprawy. "
-                f"Zgłoszenie i kosztorys możesz zaakceptować online tutaj: {pelny_link}"
+                f"Cześć! Twój samochód {auto} ({nr_rej}) został przyjęty do serwisu.{dodatek_status} "
+                f"Cyfrowy raport stanu pojazdu oraz podsumowanie kosztów znajdziesz tutaj: {pelny_link}"
             )
             tekst_url = urllib.parse.quote(tekst_wiadomosci)
             
-            czстый_telefon = "".join(filter(str.isdigit, telefon))
-            if len(czстый_telefon) == 9:
-                czстый_telefon = "48" + czстый_telefon
+            czysty_telefon = "".join(filter(str.isdigit, telefon))
+            if len(czysty_telefon) == 9:
+                czysty_telefon = "48" + czysty_telefon
                 
-            if czстый_telefon:
-                wa_url = f"https://wa.me/{czстый_telefon}?text={tekst_url}"
+            if czysty_telefon:
+                wa_url = f"https://wa.me/{czysty_telefon}?text={tekst_url}"
             else:
                 wa_url = f"https://api.whatsapp.com/send?text={tekst_url}"
             
             st.link_button("📱 Wyślij raport przez WhatsApp", wa_url, type="primary")
-            
             st.write("Alternatywnie możesz skopiować sam link ręcznie:")
             st.code(pelny_link)
