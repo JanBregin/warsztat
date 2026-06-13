@@ -10,11 +10,11 @@ from datetime import datetime, time
 
 # Adres Twojej aplikacji wpisany na stałe:
 MOJ_ADRES_APLIKACJI = "https://warsztat-status-naprawy-janek.streamlit.app/"
-TELEFON_WARSZTATU = "48502826967"  # <-- Tutaj wpisz prawdziwy numer Janka
+TELEFON_WARSZTATU = "48500600700"  # <-- Tutaj wpisz prawdziwy numer Janka
 
 st.set_page_config(page_title="Warsztat - Status Naprawy", page_icon="🔧", layout="centered")
 
-# Funkcja pobierająca polskie czcionki do PDF z oficjalnego repozytorium Google
+# Funkcja pobierająca polskie czcionki do PDF z GitHuba Google Fonts
 @st.cache_data
 def pobierz_czcionki():
     pulpit_regular = "Roboto-Regular-v2.ttf"
@@ -29,14 +29,15 @@ def pobierz_czcionki():
             with open(pulpit_bold, "wb") as f: f.write(r.content)
     return pulpit_regular, pulpit_bold
 
-# Funkcja generująca plik PDF
-def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
+# Funkcja generująca plik PDF w locie (uwzględnia rabaty)
+def generuj_pdf(data, suma_total, suma_czesci, c_robocizna, rabat_procent, kwota_rabatu):
     reg, bld = pobierz_czcionki()
     pdf = FPDF()
     pdf.add_page()
     pdf.add_font("Roboto", "", reg)
     pdf.add_font("Roboto", "B", bld)
     
+    # Nagłówek raportu
     pdf.set_font("Roboto", "B", 20)
     pdf.cell(0, 12, "RAPORT STANU POJAZDU", align="C")
     pdf.ln(12)
@@ -44,6 +45,7 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     pdf.cell(0, 6, "Cyfrowy Certyfikat Serwisowy", align="C")
     pdf.ln(12)
     
+    # Sekcja: Dane Pojazdu
     pdf.set_font("Roboto", "B", 14)
     pdf.cell(0, 8, f"🚗 Pojazd: {data.get('auto', 'Nie podano')}")
     pdf.ln(8)
@@ -60,6 +62,7 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
         pdf.ln(6)
     pdf.ln(4)
     
+    # Sekcja: Stan Techniczny
     pdf.set_font("Roboto", "B", 14)
     pdf.cell(0, 8, "🔍 Wyniki weryfikacji technicznej:")
     pdf.ln(8)
@@ -81,6 +84,7 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
         pdf.multi_cell(0, 6, data.get('uwagi'))
         pdf.ln(6)
         
+    # Sekcja: Kosztorys
     pdf.set_font("Roboto", "B", 14)
     pdf.cell(0, 8, "💰 Szczegółowy kosztorys:")
     pdf.ln(8)
@@ -96,7 +100,12 @@ def generuj_pdf(data, suma_total, suma_czesci, c_robocizna):
     pdf.cell(0, 6, f"Suma za części: {suma_czesci:,.2f} PLN")
     pdf.ln(6)
     pdf.cell(0, 6, f"Koszt robocizny / usługi: {c_robocizna:,.2f} PLN")
-    pdf.ln(8)
+    pdf.ln(6)
+    
+    if rabat_procent > 0:
+        pdf.cell(0, 6, f"Przyznany rabat ({rabat_procent}%): -{kwota_rabatu:,.2f} PLN")
+        pdf.ln(6)
+        
     pdf.set_font("Roboto", "B", 13)
     pdf.cell(0, 10, f"RAZEM DO ZAPŁATY: {suma_total:,.2f} PLN")
     pdf.ln(10)
@@ -170,6 +179,7 @@ if "view" in query_params:
         # KOSZTORYS
         st.write("---")
         st.subheader("💰 Podsumowanie Kosztów")
+        st.write("⚙️ **Wyszczególnienie użytych części:**")
         
         czesci_lista = data.get('czesci', [])
         suma_czesci = 0.0
@@ -177,9 +187,17 @@ if "view" in query_params:
             for czesc in czesci_lista:
                 st.write(f"• {czesc['nazwa']}: **{float(czesc['cena']):,.2f} PLN**".replace(",", " "))
                 suma_czesci += float(czesc['cena'])
-        
+        else:
+            st.write("*Brak wyszczególnionych części (lub wliczone w usługę)*")
+            
+        st.write(" ")
         c_robocizna = float(data.get('koszt_robocizny', 0))
-        suma_total = suma_czesci + c_robocizna
+        suma_przed_rabatem = suma_czesci + c_robocizna
+        
+        # Logika obliczania rabatów dla widoku klienta
+        rabat_procent = int(data.get('rabat', 0))
+        kwota_rabatu = suma_przed_rabatem * (rabat_procent / 100)
+        suma_total = suma_przed_rabatem - kwota_rabatu
         
         col1, col2 = st.columns(2)
         with col1:
@@ -187,20 +205,33 @@ if "view" in query_params:
         with col2:
             st.metric(label="Robocizna / Usługa", value=f"{c_robocizna:,.2f} PLN".replace(",", " "))
             
+        if rabat_procent > 0:
+            st.error(f"🎁 Przyznany rabat dla Ciebie: **-{rabat_procent}%** (Oszczędzasz {kwota_rabatu:,.2f} PLN)")
+            st.caption(f"Cena przed zniżką: ~~{suma_przed_rabatem:,.2f} PLN~~")
+            
         st.subheader(f"Razem do zapłaty: {suma_total:,.2f} PLN".replace(",", " "))
         
         # PDF
         st.write("---")
+        st.subheader("📥 Pobierz dokument")
         try:
-            pdf_data = generuj_pdf(data, suma_total, suma_czesci, c_robocizna)
-            st.download_button(label="📥 Pobierz oficjalny raport PDF", data=bytes(pdf_data), file_name=f"Raport_{data.get('nr_rej', 'serwis')}.pdf", mime="application/pdf", use_container_width=True)
+            pdf_data = generuj_pdf(data, suma_total, suma_czesci, c_robocizna, rabat_procent, kwota_rabatu)
+            st.download_button(
+                label="📥 Pobierz oficjalny raport PDF",
+                data=bytes(pdf_data),
+                file_name=f"Raport_{data.get('nr_rej', 'serwis')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
         except Exception as e:
             st.error(f"Nie udało się wygenerować pliku PDF: {e}")
         
-        # Akceptacja
+        # Sekcja akceptacji
         if status_klienta != "Gotowe do odbioru! 🎉":
             st.write("---")
             st.subheader("✍️ Akceptacja naprawy online")
+            st.write("Jeśli zgadzasz się na zakres prac i kosztorys, potwierdź zamówienie poniżej.")
+            
             chce_fakture = st.toggle("Chcę otrzymać fakturę VAT (na firmę)")
             faktura_dodatek_sms = ""
             if chce_fakture:
@@ -211,19 +242,27 @@ if "view" in query_params:
 
             tekst_akceptacji = (
                 f"Cześć! Akceptuję koszty i zakres naprawy mojego samochodu {data.get('auto')} ({data.get('nr_rej')}).\n"
-                f"Kwota podsumowania: {suma_total:,.2f} PLN.{faktura_dodatek_sms}\n"
+                f"Kwota podsumowania: {suma_total:,.2f} PLN.\n"
+                f"Udzielony rabat: {rabat_procent}%{faktura_dodatek_sms}\n"
                 f"Proszę o informację, kiedy auto będzie gotowe do odbioru! 👍"
             )
             tekst_akceptacji_url = urllib.parse.quote(tekst_akceptacji)
             link_do_mechanika = f"https://wa.me/{TELEFON_WARSZTATU}?text={tekst_akceptacji_url}"
             st.link_button("✅ AKCEPTUJĘ NAPRAWĘ I KOSZTY", link_do_mechanika, type="primary", use_container_width=True)
+        else:
+            st.write("---")
+            st.success("🚗 Samochód pomyślnie przeszedł wszystkie testy końcowe i oczekuje na odbiór w warsztacie!")
             
         st.caption("Dziękujemy za zaufanie!")
+    else:
+        st.error("Błąd! Link jest nieprawidłowy.")
+
 else:
     # =============================================================
-    # WIDOK DLA MECHANIKA
+    # WIDOK DLA MECHANIKA (Panel Janka)
     # =============================================================
     st.title("🔧 Panel Mechanika")
+    st.write("Wprowadź dane pojazdu, szczegóły naprawy oraz koszty.")
     
     with st.form("mechanic_form"):
         st.subheader("📝 Dane podstawowe")
@@ -234,17 +273,22 @@ else:
         st.write("---")
         st.subheader("📊 Status i Czas")
         status = st.selectbox("Aktualny status naprawy", ["W kolejce", "Diagnoza / Rozkręcanie", "Naprawa w toku", "Testy końcowe", "Gotowe do odbioru! 🎉"])
-        col_data, col_godzina = st.columns(2)
-        with col_data: wybrana_data = st.date_input("Planowana data odbioru", value=datetime.now())
-        with col_godzina: wybrana_godzina = st.time_input("Planowana godzina", value=time(16, 0))
         
+        col_data, col_godzina = st.columns(2)
+        with col_data:
+            wybrana_data = st.date_input("Planowana data odbioru", value=datetime.now())
+        with col_godzina:
+            wybrana_godzina = st.time_input("Planowana godzina", value=time(16, 0))
+        
+        # 🟢 NOWOŚĆ: BEZPIECZNA ORAZ ELASTYCZNA WYMIANA OLEJU (Dowolne kilometry)
         st.write("---")
         st.subheader("🛢️ Serwis olejowy")
         col_przebieg, col_interwal = st.columns(2)
         with col_przebieg:
             przebieg = st.number_input("Aktualny przebieg auta (km)", min_value=0, value=150000, step=1000)
         with col_interwal:
-            interwal = st.selectbox("Interwał kolejnej wymiany", [10000, 12000, 15000], index=2)
+            # Używamy st.number_input zamiast selectboxa, co pozwala wpisać KAŻDĄ wartość (np. 1000 km)
+            interwal = st.number_input("Za ile km kolejna wymiana oleju?", min_value=500, max_value=30000, value=10000, step=500)
         
         st.write("---")
         st.subheader("🔍 Stan techniczny")
@@ -260,9 +304,13 @@ else:
         tabela_czesci = st.data_editor(init_df, num_rows="dynamic", use_container_width=True)
                 
         st.write(" ")
-        koszt_robocizny = st.number_input("Koszt robocizny / usługi", min_value=0.0, step=50.0, value=0.0)
+        st.subheader("💵 Koszty i Rabaty")
+        koszt_robocizny = st.number_input("Koszt robocizny / usługi (PLN)", min_value=0.0, step=50.0, value=0.0)
         
-        skonfiguruj = st.form_submit_button("Generuj Link i Zapisz w Bazie")
+        # 🟢 NOWOŚĆ: SYSTEM SZYBKICH RABATÓW DLA STAŁYCH KLIENTÓW
+        rabat = st.slider("Przyznaj rabat dla klienta (%)", min_value=0, max_value=50, value=0, step=5)
+        
+        skonfiguruj = st.form_submit_button("Generuj Link i Gotową Wiadomość")
         
         if skonfiguruj:
             odbior_tekst = f"{wybrana_data.strftime('%d.%m.%Y')} o godz. {wybrana_godzina.strftime('%H:%M')}"
@@ -275,52 +323,56 @@ else:
                     czesci_dane.append({"nazwa": nazwa_raw, "cena": float(row["Cena (PLN)"])})
             
             paczka_danych = {
-                "auto": auto, "nr_rej": nr_rej, "status": status, "odbior": odbior_tekst,
-                "nastepny_olej": nastepny_olej_calc, "hamulce": hamulce, "olej": olej,
-                "zawieszenie": zawieszenie, "opony": opony, "uwagi": uwagi, "czesci": czesci_dane,
-                "koszt_robocizny": koszt_robocizny
+                "auto": auto,
+                "nr_rej": nr_rej,
+                "status": status,
+                "odbior": odbior_tekst,
+                "nastepny_olej": int(nastepny_olej_calc),
+                "hamulce": hamulce,
+                "olej": olej,
+                "zawieszenie": zawieszenie,
+                "opony": opony,
+                "uwagi": uwagi,
+                "czesci": czesci_dane,
+                "koszt_robocizny": koszt_robocizny,
+                "rabat": rabat  # Dodajemy rabat do paczki przesyłanej w linku
             }
             
             kod = encode_data(paczka_danych)
-            pelny_link = f"{MOJ_ADRES_APLIKACJI.strip(' /')}/?view={kod}"
+            czysty_url = MOJ_ADRES_APLIKACJI.strip(" /")
+            pelny_link = f"{czysty_url}/?view={kod}"
             
+            st.success("🎉 Wszystko przygotowane!")
+            
+            # Obliczenia podsumowania do SMS/WhatsApp
             suma_czesci_calc = sum(float(c['cena']) for c in czesci_dane)
-            suma_total_calc = suma_czesci_calc + float(koszt_robocizny)
+            przed_rabatem_calc = suma_czesci_calc + float(koszt_robocizny)
+            suma_total_calc = przed_rabatem_calc - (przed_rabatem_calc * (rabat / 100))
             
-            # 🟢 AUTOMATYCZNY ZAPIS DO BAZY GOOGLE SHEETS (POPRAWIONY IMPORT)
-            try:
-                from streamlit_gsheets import GSheetsConnection
-                conn = st.connection("gsheets", type=GSheetsConnection)
-                
-                nowy_wiersz = {
-                    "Data zapisu": datetime.now().strftime("%d.%m.%Y %H:%M"),
-                    "Pojazd": auto, "Rejestracja": nr_rej, "Telefon": telefon, "Status": status,
-                    "Aktualny przebieg": przebieg, "Nastepny olej przy": nastepny_olej_calc,
-                    "Koszt razem (PLN)": suma_total_calc, "Link do raportu": pelny_link
-                }
-                
-                try:
-                    existing_df = conn.read(worksheet="Sheet1", ttl=0)
-                    updated_df = pd.concat([existing_df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                except:
-                    updated_df = pd.DataFrame([nowy_wiersz])
-                
-                conn.update(worksheet="Sheet1", data=updated_df)
-                st.toast("🗄️ Dane pomyślnie zapisane w bazie Google Sheets!")
-            except Exception as e:
-                st.sidebar.warning(f"Baza danych niedostępna (wymaga konfiguracji Secrets): {e}")
-            
-            st.success("🎉 Link wygenerowany pomyślnie!")
+            tekst_rabatu_sms = f" (Udzielono rabatu {rabat}%)" if rabat > 0 else ""
             
             if status == "Gotowe do odbioru! 🎉":
-                tekst_wiadomosci = f"🎯 Dobre wieści! Twój samochód {auto} ({nr_rej}) jest już GOTOWY DO ODBIORU! 🎉\n\n💰 Koszt: {suma_total_calc:,.2f} PLN.\n📋 Raport: {pelny_link}"
+                tekst_wiadomosci = (
+                    f"🎯 Dobre wieści! Twój samochód {auto} ({nr_rej}) jest już GOTOWY DO ODBIORU! 🎉\n\n"
+                    f"💰 Ostateczny koszt naprawy{tekst_rabatu_sms}: {suma_total_calc:,.2f} PLN.\n"
+                    f"📋 Pełne podsumowanie, wykaz części i raport PDF znajdziesz w linku: {pelny_link}\n\n"
+                    f"Zapraszamy po odbior auta! 🔧"
+                )
             else:
-                tekst_wiadomosci = f"Cześć! Twój samochód {auto} ({nr_rej}) został sprawdzony. Status: {status}. Link do akceptacji kosztów: {pelny_link}"
+                dodatek_status = f" Status prac: {status}. Odbiór: {odbior_tekst}."
+                tekst_wiadomosci = (
+                    f"Cześć! Twój samochód {auto} ({nr_rej}) został sprawdzony.{dodatek_status} "
+                    f"Rozbicie kosztów części oraz akceptację online znajdziesz pod tym linkiem: {pelny_link}"
+                )
                 
             tekst_url = urllib.parse.quote(tekst_wiadomosci)
+            
             czysty_telefon = "".join(filter(str.isdigit, telefon))
-            if len(czysty_telefon) == 9: czysty_telefon = "48" + czysty_telefon
+            if len(czysty_telefon) == 9:
+                czysty_telefon = "48" + czysty_telefon
+                
             wa_url = f"https://wa.me/{czysty_telefon}?text={tekst_url}" if czysty_telefon else f"https://api.whatsapp.com/send?text={tekst_url}"
             
             st.link_button("📱 Wyślij raport przez WhatsApp", wa_url, type="primary")
+            st.write("Link pomocniczy:")
             st.code(pelny_link)
